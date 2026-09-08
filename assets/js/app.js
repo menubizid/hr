@@ -50,6 +50,109 @@ jQuery(document).ready(function($) {
     });
 
     // --- Dashboard View ---
+
+    // PDF Template Builder
+    window.buildPdfTemplate = function(type, data) {
+        let templateId = 'pdf-template-wrapper';
+        $('#' + templateId).remove();
+
+        let dateStr = new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+        let html = `<div id="${templateId}" style="position: absolute; left: -9999px; top: 0; width: 800px; background: white; padding: 40px; font-family: sans-serif; color: #333;">
+            <div style="border-bottom: 2px solid #2563eb; padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end;">
+                <div>
+                    <h1 style="color: #1e3a8a; margin: 0; font-size: 24px; font-weight: bold;">HR Job Analysis CMS</h1>
+                    <h2 style="color: #4b5563; margin: 5px 0 0 0; font-size: 18px;">${type === 'work_plan' ? 'Dokumen Rencana Kerja Harian' : 'Dokumen Laporan'}</h2>
+                </div>
+                <div style="text-align: right; color: #6b7280; font-size: 12px;">
+                    Tanggal: ${dateStr}<br>
+                    Dicetak Secara Otomatis
+                </div>
+            </div>
+            <div id="${templateId}-content"></div>
+        </div>`;
+
+        $('body').append(html);
+        return $('#' + templateId);
+    };
+
+    window.triggerPdfWorkPlan = function(btnId) {
+        let btn = $('#' + btnId);
+        let origText = btn.html();
+        btn.html('<span class="animate-pulse">Menghasilkan PDF...</span>');
+
+        // Fetch tasks to build the plan
+        $.ajax({
+            url: apiRoot + 'tasks', headers: apiHeaders,
+            success: function(tasks) {
+                let wrapper = window.buildPdfTemplate('work_plan');
+                let content = wrapper.find('#pdf-template-wrapper-content');
+
+                let activeTasks = tasks.filter(t => t.status !== 'Done');
+
+                let tbl = `<p style="margin-bottom:15px; font-size: 14px;">Berikut adalah daftar tugas aktif (tertunda/sedang berjalan) untuk diselesaikan hari ini:</p>`;
+                tbl += `<table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                    <thead>
+                        <tr style="background: #f3f4f6;">
+                            <th style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">Judul Tugas</th>
+                            <th style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">Kategori</th>
+                            <th style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">Prioritas</th>
+                            <th style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+                if (activeTasks.length === 0) {
+                    tbl += `<tr><td colspan="4" style="border: 1px solid #d1d5db; padding: 8px; text-align: center;">Tidak ada tugas aktif.</td></tr>`;
+                } else {
+                    activeTasks.forEach(t => {
+                        tbl += `<tr>
+                            <td style="border: 1px solid #d1d5db; padding: 8px; font-weight: bold;">${window.escapeHtml(t.title)}</td>
+                            <td style="border: 1px solid #d1d5db; padding: 8px;">${t.category}</td>
+                            <td style="border: 1px solid #d1d5db; padding: 8px; color: ${t.priority==='Tinggi'?'#dc2626':'#374151'};${t.priority==='Tinggi'?'font-weight:bold;':''}">${t.priority}</td>
+                            <td style="border: 1px solid #d1d5db; padding: 8px;">${t.status}</td>
+                        </tr>`;
+                    });
+                }
+                tbl += `</tbody></table>`;
+
+                content.html(tbl);
+
+                // Render with html2canvas
+                if (window.html2canvas && window.jspdf) {
+                    window.html2canvas(wrapper[0], { scale: 2 }).then(canvas => {
+                        const imgData = canvas.toDataURL('image/jpeg', 0.8);
+                        const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');
+                        const pdfWidth = pdf.internal.pageSize.getWidth();
+                        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+
+                        const base64Pdf = pdf.output('datauristring');
+
+                        $.ajax({
+                            url: apiRoot + 'pdfs', method: 'POST', headers: apiHeaders,
+                            data: { pdf_type: 'work_plan', pdf_base64: base64Pdf },
+                            success: function() {
+                                btn.html('<span class="text-green-700">✅ Berhasil Disimpan & Diunduh</span>');
+                                pdf.save(`Rencana_Kerja_${Date.now()}.pdf`);
+                                if(typeof window.loadPdfArchives === 'function') window.loadPdfArchives();
+
+                                setTimeout(() => btn.html(origText), 3000);
+                                wrapper.remove(); // cleanup
+                            }
+                        });
+                    });
+                }
+
+                $('#eval-period-filter').val(period);
+                $('#eval-period-filter').off('change').on('change', function() {
+                    window.loadProfile(container, $(this).val());
+                });
+                window.loadPdfArchives = loadPdfArchives;
+            }
+        });
+    };
+
     window.loadDashboard = function(container) {
         $.ajax({
             url: apiRoot + 'dashboard',
@@ -153,7 +256,7 @@ jQuery(document).ready(function($) {
                     }, 500);
                 }
 
-                $('#btn-generate-plan').on('click', () => { triggerPDFGeneration('work_plan', null, 'btn-generate-plan'); }); // Using null as we don't have a specific div for "plan" in profile, would come from dashboard/tasks
+                $('#btn-generate-plan').on('click', () => { window.triggerPdfWorkPlan('btn-generate-plan'); }); // Using null as we don't have a specific div for "plan" in profile, would come from dashboard/tasks
                 $('#btn-generate-eval').on('click', () => { triggerPDFGeneration('evaluation', 'pdf-eval-content', 'btn-generate-eval'); });
                 $('#btn-generate-org').on('click', () => { triggerPDFGeneration('org_chart', 'pdf-org-content', 'btn-generate-org'); });
 

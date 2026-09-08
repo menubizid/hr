@@ -233,6 +233,7 @@ class HR_JA_API_Endpoints {
     public function create_diagram( WP_REST_Request $request ) {
         global $wpdb;
         $wpdb->insert( $wpdb->prefix . 'hr_diagrams', array(
+            'creator_id' => get_current_user_id(),
             'title' => sanitize_text_field( $request->get_param('title') ),
             'category' => sanitize_text_field( $request->get_param('category') ),
             'mermaid_script' => sanitize_textarea_field( $request->get_param('mermaid_script') )
@@ -242,7 +243,7 @@ class HR_JA_API_Endpoints {
 
     public function update_diagram( WP_REST_Request $request ) {
         global $wpdb;
-        if ( !$this->check_manager_permission() ) return new WP_Error( 'forbidden', 'Managers only', array( 'status' => 403 ) );
+        if ( !$this->check_owner_or_manager('hr_diagrams', $request->get_param('id')) ) return new WP_Error( 'forbidden', 'Access denied', array( 'status' => 403 ) );
         $wpdb->update( $wpdb->prefix . 'hr_diagrams', array(
             'title' => sanitize_text_field( $request->get_param('title') ),
             'category' => sanitize_text_field( $request->get_param('category') ),
@@ -253,7 +254,7 @@ class HR_JA_API_Endpoints {
 
     public function delete_diagram( WP_REST_Request $request ) {
         global $wpdb;
-        if ( !$this->check_manager_permission() ) return new WP_Error( 'forbidden', 'Managers only', array( 'status' => 403 ) );
+        if ( !$this->check_owner_or_manager('hr_diagrams', $request->get_param('id')) ) return new WP_Error( 'forbidden', 'Access denied', array( 'status' => 403 ) );
         $wpdb->delete( $wpdb->prefix . 'hr_diagrams', array( 'id' => $request->get_param('id') ) );
         return rest_ensure_response( array( 'success' => true ) );
     }
@@ -272,7 +273,7 @@ class HR_JA_API_Endpoints {
             'supervisor' => get_user_meta( $user_id, 'hr_ja_supervisor_name', true ),
             'subordinates' => get_user_meta( $user_id, 'hr_ja_subordinates', true ),
             'signature' => get_user_meta( $user_id, 'hr_ja_signature_url', true ),
-            'evaluation_score' => $this->calculate_evaluation_score( $user_id )
+            'evaluation_score' => $this->calculate_evaluation_score( $user_id, sanitize_text_field($request->get_param('period')) )
         );
         return rest_ensure_response( $profile );
     }
@@ -285,23 +286,30 @@ class HR_JA_API_Endpoints {
         return rest_ensure_response( array( 'success' => true ) );
     }
 
-    private function calculate_evaluation_score( $user_id ) {
+    private function calculate_evaluation_score( $user_id, $period = 'daily' ) {
         global $wpdb;
         $task_table = $wpdb->prefix . 'hr_tasks';
 
+        $time_filter = "AND DATE(updated_at) = CURDATE()"; // daily default
+        if ($period === 'weekly') {
+            $time_filter = "AND YEARWEEK(updated_at, 1) = YEARWEEK(CURDATE(), 1)";
+        } elseif ($period === 'monthly') {
+            $time_filter = "AND MONTH(updated_at) = MONTH(CURDATE()) AND YEAR(updated_at) = YEAR(CURDATE())";
+        }
+
         $base_score = 20;
 
-        $total_assigned = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $task_table WHERE assignee_id = %d", $user_id ) );
-        $total_done = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $task_table WHERE assignee_id = %d AND status = 'Done'", $user_id ) );
+        $total_assigned = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $task_table WHERE assignee_id = %d $time_filter", $user_id ) );
+        $total_done = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $task_table WHERE assignee_id = %d AND status = 'Done' $time_filter", $user_id ) );
         $productivity_score = ($total_assigned > 0) ? min(30, ($total_done / $total_assigned) * 30) : 0;
 
-        $avg_initiative = $wpdb->get_var( $wpdb->prepare( "SELECT AVG(initiative_score) FROM $task_table WHERE assignee_id = %d AND status = 'Done'", $user_id ) );
+        $avg_initiative = $wpdb->get_var( $wpdb->prepare( "SELECT AVG(initiative_score) FROM $task_table WHERE assignee_id = %d AND status = 'Done' $time_filter", $user_id ) );
         $initiative_score = min(20, ($avg_initiative / 5) * 20);
 
-        $financial_impact = $wpdb->get_var( $wpdb->prepare( "SELECT SUM(financial_value) FROM $task_table WHERE assignee_id = %d AND (impact_type = 'Positive' OR impact_type = 'Cost Saving') AND status = 'Done'", $user_id ) );
+        $financial_impact = $wpdb->get_var( $wpdb->prepare( "SELECT SUM(financial_value) FROM $task_table WHERE assignee_id = %d AND (impact_type = 'Positive' OR impact_type = 'Cost Saving') AND status = 'Done' $time_filter", $user_id ) );
         $financial_score = min(30, $financial_impact > 1000000 ? 30 : ($financial_impact / 1000000) * 30);
 
-        $high_priority_done = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $task_table WHERE assignee_id = %d AND status = 'Done' AND priority = 'Tinggi'", $user_id ) );
+        $high_priority_done = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $task_table WHERE assignee_id = %d AND status = 'Done' AND priority = 'Tinggi' $time_filter", $user_id ) );
         $bonus = $high_priority_done * 5;
 
         $total_score = $base_score + $productivity_score + $initiative_score + $financial_score + $bonus;

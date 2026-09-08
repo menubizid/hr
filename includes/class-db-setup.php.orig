@@ -88,7 +88,6 @@ class HR_JA_DB_Setup {
         $table_diagrams = $wpdb->prefix . 'hr_diagrams';
         $sql_diagrams = "CREATE TABLE $table_diagrams (
             id bigint(20) NOT NULL AUTO_INCREMENT,
-            creator_id bigint(20),
             title varchar(255) NOT NULL,
             category varchar(100),
             mermaid_script text,
