@@ -65,11 +65,24 @@ class HR_JA_DB_Setup {
             views int(11) DEFAULT 0,
             is_approved tinyint(1) DEFAULT 0,
             approver_id bigint(20),
+            wa_script text,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY  (id)
         ) $charset_collate;";
         dbDelta( $sql_docs );
+
+        // Table for Document Revisions
+        $table_revisions = $wpdb->prefix . 'hr_document_revisions';
+        $sql_revisions = "CREATE TABLE $table_revisions (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            document_id bigint(20) NOT NULL,
+            editor_id bigint(20) NOT NULL,
+            content longtext,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id)
+        ) $charset_collate;";
+        dbDelta( $sql_revisions );
 
         // Table for Diagrams Library
         $table_diagrams = $wpdb->prefix . 'hr_diagrams';
@@ -84,6 +97,19 @@ class HR_JA_DB_Setup {
             PRIMARY KEY  (id)
         ) $charset_collate;";
         dbDelta( $sql_diagrams );
+
+        // Table for Daily PDFs
+        $table_pdfs = $wpdb->prefix . 'hr_daily_pdfs';
+        $sql_pdfs = "CREATE TABLE $table_pdfs (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            user_id bigint(20) NOT NULL,
+            pdf_type varchar(50) NOT NULL, /* work_plan, evaluation, org_chart */
+            date date NOT NULL,
+            file_url varchar(255) NOT NULL,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id)
+        ) $charset_collate;";
+        dbDelta( $sql_pdfs );
     }
 
     private static function add_roles() {
