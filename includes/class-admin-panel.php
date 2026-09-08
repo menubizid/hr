@@ -29,7 +29,19 @@ class HR_JA_Admin_Panel {
 
     public function render_dashboard() {
         echo '<div class="wrap"><h1>HR Job Analysis - Admin Dashboard</h1>';
-        echo '<p>Gunakan menu di sebelah kiri untuk mengelola departemen, pengguna, dan persetujuan.</p></div>';
+        echo '<p>Gunakan menu di sebelah kiri untuk mengelola departemen, pengguna, dan persetujuan.</p>';
+
+        $page_id = get_option('hr_ja_app_page_id');
+        if ($page_id) {
+            $url = get_permalink($page_id);
+            echo '<div style="margin-top:20px; padding:20px; background:#fff; border:1px solid #ccd0d4; border-left:4px solid #00a0d2; max-width:600px;">';
+            echo '<h2 style="margin-top:0;">Aplikasi Mobile Tersedia</h2>';
+            echo '<p>Aplikasi utama berada di bagian frontend (halaman web), bukan di sini. Admin panel ini hanya untuk pengaturan departemen dan struktur dasar.</p>';
+            echo '<a href="' . esc_url($url) . '" target="_blank" class="button button-primary button-large">Buka Aplikasi Mobile CMS</a>';
+            echo '</div>';
+        }
+
+        echo '</div>';
     }
 
     public function render_departments() {
