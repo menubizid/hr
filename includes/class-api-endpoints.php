@@ -242,6 +242,7 @@ class HR_JA_API_Endpoints {
 
     public function update_diagram( WP_REST_Request $request ) {
         global $wpdb;
+        if ( !$this->check_manager_permission() ) return new WP_Error( 'forbidden', 'Managers only', array( 'status' => 403 ) );
         $wpdb->update( $wpdb->prefix . 'hr_diagrams', array(
             'title' => sanitize_text_field( $request->get_param('title') ),
             'category' => sanitize_text_field( $request->get_param('category') ),
@@ -252,6 +253,7 @@ class HR_JA_API_Endpoints {
 
     public function delete_diagram( WP_REST_Request $request ) {
         global $wpdb;
+        if ( !$this->check_manager_permission() ) return new WP_Error( 'forbidden', 'Managers only', array( 'status' => 403 ) );
         $wpdb->delete( $wpdb->prefix . 'hr_diagrams', array( 'id' => $request->get_param('id') ) );
         return rest_ensure_response( array( 'success' => true ) );
     }
@@ -317,12 +319,27 @@ class HR_JA_API_Endpoints {
     // --- Automated PDFs Storage ---
     public function store_pdf( WP_REST_Request $request ) {
         global $wpdb;
-        $wpdb->insert($wpdb->prefix . 'hr_daily_pdfs', array(
-            'user_id' => get_current_user_id(),
-            'pdf_type' => sanitize_text_field($request->get_param('pdf_type')),
-            'date' => current_time('Y-m-d'),
-            'file_url' => sanitize_text_field($request->get_param('file_url')) // Storing the base64 or reference generated client-side
-        ));
+        $pdf_base64 = $request->get_param('pdf_base64');
+        if ( empty($pdf_base64) ) return new WP_Error('missing_data', 'No PDF data provided', array('status'=>400));
+
+        // Actually save the file to WordPress uploads dir
+        $upload_dir = wp_upload_dir();
+        $pdf_decoded = base64_decode(preg_replace('#^data:application/\w+;base64,#i', '', $pdf_base64));
+        $filename = 'auto_generated_' . sanitize_file_name($request->get_param('pdf_type')) . '_' . get_current_user_id() . '_' . time() . '.pdf';
+        $file_path = $upload_dir['path'] . '/' . $filename;
+
+        if ( file_put_contents($file_path, $pdf_decoded) ) {
+            $file_url = $upload_dir['url'] . '/' . $filename;
+            $wpdb->insert($wpdb->prefix . 'hr_daily_pdfs', array(
+                'user_id' => get_current_user_id(),
+                'pdf_type' => sanitize_text_field($request->get_param('pdf_type')),
+                'date' => current_time('Y-m-d'),
+                'file_url' => $file_url
+            ));
+        } else {
+            return new WP_Error('save_failed', 'Could not save PDF to server', array('status'=>500));
+        }
+
         return rest_ensure_response(array('success' => true));
     }
 

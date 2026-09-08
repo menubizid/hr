@@ -18,6 +18,7 @@ require_once HR_JA_PLUGIN_DIR . 'includes/class-db-setup.php';
 require_once HR_JA_PLUGIN_DIR . 'includes/class-admin-panel.php';
 require_once HR_JA_PLUGIN_DIR . 'includes/class-api-endpoints.php';
 require_once HR_JA_PLUGIN_DIR . 'includes/class-frontend-ui.php';
+require_once HR_JA_PLUGIN_DIR . 'includes/class-public-view.php';
 
 // Activation Hook
 register_activation_hook( __FILE__, array( 'HR_JA_DB_Setup', 'activate' ) );
@@ -29,4 +30,5 @@ function hr_ja_init_plugin() {
     new HR_JA_Admin_Panel();
     new HR_JA_API_Endpoints();
     new HR_JA_Frontend_UI();
+    new HR_JA_Public_View();
 }

@@ -36,7 +36,7 @@ class HR_JA_Admin_Panel {
         global $wpdb;
         $table_name = $wpdb->prefix . 'hr_departments';
 
-        if ( isset( $_POST['submit_dept'] ) && current_user_can( 'manage_options' ) ) {
+        if ( isset( $_POST['submit_dept'] ) && current_user_can( 'manage_options' ) && isset($_POST['_wpnonce']) && wp_verify_nonce($_POST['_wpnonce'], 'save_dept') ) {
             $name = sanitize_text_field( $_POST['dept_name'] );
             $desc = sanitize_textarea_field( $_POST['dept_desc'] );
             $pic = intval( $_POST['dept_pic'] );
@@ -49,7 +49,7 @@ class HR_JA_Admin_Panel {
             }
         }
 
-        if ( isset( $_GET['delete_dept'] ) && current_user_can( 'manage_options' ) ) {
+        if ( isset( $_GET['delete_dept'] ) && current_user_can( 'manage_options' ) && isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'delete_dept_' . $_GET['delete_dept']) ) {
             $id = intval( $_GET['delete_dept'] );
             $wpdb->delete( $table_name, array( 'id' => $id ) );
             echo '<div class="updated"><p>Department deleted.</p></div>';
@@ -73,7 +73,7 @@ class HR_JA_Admin_Panel {
                 echo '<td>' . esc_html( $dept->name ) . '</td>';
                 echo '<td>' . esc_html( $dept->description ) . '</td>';
                 echo '<td>' . esc_html( $pic_name ) . '</td>';
-                echo '<td><a href="?page=hr-ja-departments&edit_dept=' . esc_attr( $dept->id ) . '">Edit</a> | <a href="?page=hr-ja-departments&delete_dept=' . esc_attr( $dept->id ) . '" onclick="return confirm(\'Yakin?\')">Delete</a></td>';
+                echo '<td><a href="?page=hr-ja-departments&edit_dept=' . esc_attr( $dept->id ) . '">Edit</a> | <a href="' . wp_nonce_url( '?page=hr-ja-departments&delete_dept=' . esc_attr( $dept->id ), 'delete_dept_' . $dept->id ) . '" onclick="return confirm(\'Yakin?\')">Delete</a></td>';
                 echo '</tr>';
             }
         } else {
@@ -91,6 +91,7 @@ class HR_JA_Admin_Panel {
 
         echo '<h2>' . ($edit_id ? 'Edit Department' : 'Add New Department') . '</h2>';
         echo '<form method="post" action="?page=hr-ja-departments">';
+        wp_nonce_field('save_dept');
         if ($edit_id) echo '<input type="hidden" name="dept_id" value="'.esc_attr($edit_id).'">';
         echo '<table class="form-table">';
         echo '<tr><th scope="row"><label for="dept_name">Nama Departemen</label></th>';
